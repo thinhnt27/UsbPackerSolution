@@ -1,0 +1,65 @@
+﻿<Window x:Class="UsbPacker.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="USB Video Packer" Height="520" Width="820"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="USB Video Packer — embed hashes into EXE" FontSize="16" FontWeight="Bold"/>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,0,0,8">
+            <Label Content="Removable drive:" VerticalAlignment="Center"/>
+            <ComboBox x:Name="DrivesCombo" Width="260" Margin="8,0"/>
+            <Button x:Name="RefreshDrivesBtn" Content="Refresh" Click="RefreshDrivesBtn_Click" Margin="8,0" Width="80"/>
+            <TextBlock Text="(or choose folder when no USB selected)" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="Gray"/>
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="300"/>
+            </Grid.ColumnDefinitions>
+
+            <GroupBox Header="Files to pack" Grid.Column="0" Margin="0,0,12,0">
+                <DockPanel>
+                    <ListBox x:Name="FilesList" Margin="6" SelectionMode="Extended"/>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom" HorizontalAlignment="Right" Margin="6">
+                        <Button x:Name="AddFilesBtn" Content="Add files..." Click="AddFilesBtn_Click" Margin="6" Width="110"/>
+                        <Button x:Name="RemoveBtn" Content="Remove selected" Click="RemoveBtn_Click" Margin="6" Width="120"/>
+                    </StackPanel>
+                </DockPanel>
+            </GroupBox>
+
+            <StackPanel Grid.Column="1">
+                <GroupBox Header="Hashes (embedded in EXE)" Margin="0,0,0,12">
+                    <StackPanel Margin="6">
+                        <StackPanel Orientation="Horizontal" Margin="0,4">
+                            <Button x:Name="LoadHashesBtn" Content="Load JSON..." Click="LoadHashesBtn_Click" Width="110" Margin="0,0,6,0"/>
+                            <Button x:Name="PasteHashesBtn" Content="Paste JSON" Click="PasteHashesBtn_Click" Width="100" Margin="0,0,6,0"/>
+                            <Button x:Name="ClearHashesBtn" Content="Clear" Click="ClearHashesBtn_Click" Width="60"/>
+                        </StackPanel>
+                        <TextBox x:Name="HashesTextBox" Height="200" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="12"/>
+                        <CheckBox x:Name="EmbedHashesCheck" Content="Embed hashes into each EXE" IsChecked="True" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,8">
+            <Button x:Name="StartBtn" Content="Start: Create EXE(s)" Click="StartBtn_Click" Width="220" Height="36" Background="#FF2D8CFF" Foreground="White"/>
+            <ProgressBar x:Name="Progress" Width="420" Height="20" Margin="12,0" Minimum="0" Maximum="100"/>
+            <TextBlock x:Name="ProgressPercent" Margin="12,0,0,0" VerticalAlignment="Center" Text="0%"/>
+        </StackPanel>
+
+        <TextBlock x:Name="StatusText" Grid.Row="4" Text="Ready" Foreground="DarkGreen" FontWeight="SemiBold"/>
+    </Grid>
+</Window>
