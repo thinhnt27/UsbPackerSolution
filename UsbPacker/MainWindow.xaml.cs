@@ -1,4 +1,6 @@
-﻿using System;
+﻿// File: MainWindow.xaml.cs
+using Microsoft.Win32;
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.IO.Compression;
@@ -9,8 +11,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using VideoPackerSolution.Utils;
 using MessageBox = System.Windows.MessageBox;
-using Microsoft.Win32;
-using SaveFileDialog = Microsoft.Win32.SaveFileDialog; // ở đầu file nếu chưa có
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
 namespace UsbPacker
 {
@@ -26,18 +28,74 @@ namespace UsbPacker
 
         private ObservableCollection<DriveEntry> DrivesCollection = new ObservableCollection<DriveEntry>();
         private System.Collections.Generic.List<string> LoadedHashes = new System.Collections.Generic.List<string>();
+        private bool ImportedFromJson = false;
 
         public MainWindow()
         {
             InitializeComponent();
-            DrivesListBox.ItemsSource = DrivesCollection;
+
+            // Ensure controls exist before using them (guard)
+            if (this.FindName("DrivesListBox") is System.Windows.Controls.ListBox lb)
+                lb.ItemsSource = DrivesCollection;
+
+            // Default mode: Use USB
+            if (this.FindName("UseUsbRadio") is System.Windows.Controls.RadioButton rbUsb)
+                rbUsb.IsChecked = true;
+
+            // Set UI mode safely (will check for panels existence)
+            SetModeUI(useJson: false);
+
             RefreshDrives();
+            UpdateHashesCount();
+        }
+
+        // Mode radio checked handler (wired in XAML)
+        private void ModeRadio_Checked(object sender, RoutedEventArgs e)
+        {
+            var useJsonRadio = this.FindName("UseJsonRadio") as System.Windows.Controls.RadioButton;
+            var useUsbRadio = this.FindName("UseUsbRadio") as System.Windows.Controls.RadioButton;
+
+            bool useJson = useJsonRadio != null && useJsonRadio.IsChecked == true;
+
+            // if there are existing hashes, confirm clearing before switching mode
+            if (LoadedHashes != null && LoadedHashes.Count > 0)
+            {
+                var res = MessageBox.Show("Bạn đang chuyển chế độ. Việc chuyển sẽ xoá danh sách hash hiện tại. Tiếp tục?", "Xác nhận", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (res == MessageBoxResult.No)
+                {
+                    // revert selection if user cancels
+                    if (useJsonRadio != null && useUsbRadio != null)
+                    {
+                        if (useJson) { useJsonRadio.IsChecked = false; useUsbRadio.IsChecked = true; }
+                        else { useUsbRadio.IsChecked = false; useJsonRadio.IsChecked = true; }
+                    }
+                    return;
+                }
+                LoadedHashes.Clear();
+                ImportedFromJson = false;
+                UpdateHashesCount();
+            }
+
+            SetModeUI(useJson);
+        }
+
+        private void SetModeUI(bool useJson)
+        {
+            var jsonPanel = this.FindName("JsonControlsPanel") as UIElement;
+            var usbPanel = this.FindName("UsbControlsPanel") as UIElement;
+            var drivesList = this.FindName("DrivesListBox") as System.Windows.Controls.ListBox;
+
+            if (jsonPanel != null) jsonPanel.Visibility = useJson ? Visibility.Visible : Visibility.Collapsed;
+            if (usbPanel != null) usbPanel.Visibility = useJson ? Visibility.Collapsed : Visibility.Visible;
+            if (drivesList != null) drivesList.IsEnabled = !useJson;
         }
 
         private void RefreshDrivesBtn_Click(object sender, RoutedEventArgs e) => RefreshDrives();
 
         private void RefreshDrives()
         {
+            LoadedHashes = new List<string>();
+            UpdateHashesCount();
             DrivesCollection.Clear();
             var drives = DriveInfo.GetDrives()
                 .Where(d => d.DriveType == DriveType.Removable && d.IsReady)
@@ -48,29 +106,47 @@ namespace UsbPacker
                 if (!root.EndsWith("\\")) root += "\\";
                 DrivesCollection.Add(new DriveEntry { Root = root, VolumeLabel = d.VolumeLabel ?? "" });
             }
-            StatusText.Text = $"Found {DrivesCollection.Count} removable drive(s).";
+            SafeSetStatus($"Found {DrivesCollection.Count} removable drive(s).");
         }
 
         private void SelectAllDrivesBtn_Click(object sender, RoutedEventArgs e)
         {
             foreach (var item in DrivesCollection) item.IsChecked = true;
-            DrivesListBox.Items.Refresh();
+            (this.FindName("DrivesListBox") as System.Windows.Controls.ListBox)?.Items.Refresh();
         }
 
         private void DeselectAllDrivesBtn_Click(object sender, RoutedEventArgs e)
         {
             foreach (var item in DrivesCollection) item.IsChecked = false;
-            DrivesListBox.Items.Refresh();
+            (this.FindName("DrivesListBox") as System.Windows.Controls.ListBox)?.Items.Refresh();
+            LoadedHashes = new List<string>();
+            UpdateHashesCount();
         }
 
-        // Append selected drives -> compute hashes and add to LoadedHashes
+        // Add (append) from selected USBs
         private void AddSelectedUsbHashesBtn_Click(object sender, RoutedEventArgs e)
         {
+            // Ensure in USB mode
+            var useJsonRadio = this.FindName("UseJsonRadio") as System.Windows.Controls.RadioButton;
+            if (useJsonRadio != null && useJsonRadio.IsChecked == true)
+            {
+                MessageBox.Show("Đang ở chế độ Import JSON — để dùng USB hãy chuyển sang 'Use selected USBs'.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             var selected = DrivesCollection.Where(x => x.IsChecked).ToArray();
             if (selected.Length == 0)
             {
                 MessageBox.Show("Chưa chọn USB nào. Hãy tick ít nhất 1 ổ.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
+            }
+
+            if (ImportedFromJson)
+            {
+                var resConfirm = MessageBox.Show("Bạn đã import hashes từ file JSON. Thao tác 'Add → hashes' sẽ **xoá** danh sách hiện tại và thêm hash từ USB đã chọn. Tiếp tục?", "Xác nhận", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (resConfirm == MessageBoxResult.No) return;
+                LoadedHashes.Clear();
+                ImportedFromJson = false;
             }
 
             int added = 0;
@@ -94,12 +170,19 @@ namespace UsbPacker
             }
 
             UpdateHashesCount();
-            StatusText.Text = $"Added {added} new hash(es) from selected drives.";
+            SafeSetStatus($"Added {added} new hash(es) from selected drives.");
         }
 
-        // REPLACE selected drives -> replace LoadedHashes with only selected drives' hashes
+        // Replace (overwrite) from selected USBs
         private void RefreshSelectedUsbHashesBtn_Click(object sender, RoutedEventArgs e)
         {
+            var useJsonRadio = this.FindName("UseJsonRadio") as System.Windows.Controls.RadioButton;
+            if (useJsonRadio != null && useJsonRadio.IsChecked == true)
+            {
+                MessageBox.Show("Đang ở chế độ Import JSON — để dùng USB hãy chuyển sang 'Use selected USBs'.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             var selected = DrivesCollection.Where(x => x.IsChecked).ToArray();
             if (selected.Length == 0)
             {
@@ -107,7 +190,7 @@ namespace UsbPacker
                 return;
             }
 
-            var newList = new System.Collections.Generic.List<string>();
+            var newList = new List<string>();
             int added = 0;
             foreach (var d in selected)
             {
@@ -129,21 +212,98 @@ namespace UsbPacker
             }
 
             LoadedHashes = newList;
+            ImportedFromJson = false;
             UpdateHashesCount();
-            StatusText.Text = $"Replaced hashes: now {LoadedHashes.Count} hash(es) (from selected drives).";
+            SafeSetStatus($"Replaced hashes: now {LoadedHashes.Count} hash(es) (from selected drives).");
         }
 
-        private void UpdateHashesCount()
+        // IMPORT hashes from JSON file
+        private void ImportHashesBtn_Click(object sender, RoutedEventArgs e)
         {
-            HashesCountText.Text = $"Hashes: {LoadedHashes.Count}";
+            var useUsbRadio = this.FindName("UseUsbRadio") as System.Windows.Controls.RadioButton;
+            if (useUsbRadio != null && useUsbRadio.IsChecked == true)
+            {
+                MessageBox.Show("Đang ở chế độ USB — chuyển sang 'Import JSON' để import file.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var ofd = new OpenFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                Title = "Select hashes JSON file"
+            };
+
+            if (ofd.ShowDialog() == true)
+            {
+                try
+                {
+                    var txt = File.ReadAllText(ofd.FileName, Encoding.UTF8);
+                    if (!TryParseHashesFromText(txt, out var hashes, out var err))
+                    {
+                        MessageBox.Show($"Không thể parse JSON: {err}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+
+                    LoadedHashes = hashes;
+                    ImportedFromJson = true;
+                    UpdateHashesCount();
+                    SafeSetStatus($"Imported {LoadedHashes.Count} hash(es) from file: {Path.GetFileName(ofd.FileName)}");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Lỗi đọc file: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
         }
+
+        // Export
+        private void ExportHashesBtn_Click(object sender, RoutedEventArgs e)
+        {
+            // ensure we're in USB mode
+            var useJsonRadio = this.FindName("UseJsonRadio") as System.Windows.Controls.RadioButton;
+            if (useJsonRadio != null && useJsonRadio.IsChecked == true)
+            {
+                MessageBox.Show("Export chỉ khả dụng khi đang ở chế độ 'Use selected USBs'. Hãy chuyển chế độ về USB.", "Không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (LoadedHashes == null || LoadedHashes.Count == 0)
+            {
+                MessageBox.Show("Không có hash nào để xuất.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dlg = new SaveFileDialog
+            {
+                FileName = "hashes.json",
+                DefaultExt = ".json",
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                try
+                {
+                    var json = JsonSerializer.Serialize(LoadedHashes, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(dlg.FileName, json, Encoding.UTF8);
+                    MessageBox.Show($"Đã xuất {LoadedHashes.Count} hash vào:\n{dlg.FileName}", "Exported", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Lỗi khi lưu file: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
 
         // files UI
         private void AddFilesBtn_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Filter = "Video files|*.mp4;*.mkv;*.avi;*.mov;*.*" };
             if (dlg.ShowDialog() == true)
+            {
                 foreach (var f in dlg.FileNames) FilesList.Items.Add(f);
+            }
         }
 
         private void RemoveBtn_Click(object sender, RoutedEventArgs e)
@@ -152,32 +312,22 @@ namespace UsbPacker
             foreach (var s in sel) FilesList.Items.Remove(s);
         }
 
-        // pack start
+        // Start pack
         private async void StartBtn_Click(object sender, RoutedEventArgs e)
         {
             if (FilesList.Items.Count == 0) { MessageBox.Show("Chưa có file nào để pack."); return; }
 
-            // ensure we have hashes (must come from selected USBs)
-            if (LoadedHashes == null || LoadedHashes.Count == 0)
-            {
-                var res = MessageBox.Show("Bạn chưa thêm hash nào từ USB. Muốn tiếp tục mà không nhúng hash? (không nhúng = file exe sẽ không cho mở trên USB nào)", "Xác nhận", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (res == MessageBoxResult.No) return;
-            }
-
-            // find stub.exe in same folder as app
             var appFolder = AppDomain.CurrentDomain.BaseDirectory;
             var stubPath = Path.Combine(appFolder, "StubPlayer.exe");
             if (!File.Exists(stubPath))
             {
-                MessageBox.Show($"Không tìm thấy StubPlayer.exe ở:  {stubPath} \nBạn phải copy StubPlayer.exe (player) vào cùng thư mục với chương trình này.", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Không tìm thấy StubPlayer.exe ở: {stubPath}\nBạn phải copy StubPlayer.exe (player) vào cùng thư mục với chương trình này.", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
-            // Done folder next to app
             var doneFolder = Path.Combine(appFolder, "Done");
             Directory.CreateDirectory(doneFolder);
 
-            // lock UI
             StartBtn.IsEnabled = false;
             AddFilesBtn.IsEnabled = false;
             RemoveBtn.IsEnabled = false;
@@ -194,12 +344,10 @@ namespace UsbPacker
                     idx++;
                     Progress.Value = (double)(idx - 1) / total * 100;
                     ProgressPercent.Text = $"{(int)Progress.Value}%";
-                    StatusText.Text = $"({idx}/{total}) Đang xử lý: {Path.GetFileName(file)}";
+                    SafeSetStatus($"({idx}/{total}) Đang xử lý: {Path.GetFileName(file)}");
 
-                    // create zip for single file
                     byte[] zip = await Task.Run(() => CreateZipForSingleFile(file));
 
-                    // output name
                     var baseName = Path.GetFileNameWithoutExtension(file);
                     var safeName = MakeSafeFileName(baseName);
                     var outName = safeName + ".exe";
@@ -212,7 +360,6 @@ namespace UsbPacker
                         suffix++;
                     }
 
-                    // prepare hashes bytes if any
                     byte[] hashesBytes = Array.Empty<byte>();
                     if (LoadedHashes.Count > 0)
                     {
@@ -220,10 +367,9 @@ namespace UsbPacker
                         hashesBytes = Encoding.UTF8.GetBytes(json);
                     }
 
-                    // append payload + metadata
-                    StatusText.Text = $"({idx}/{total}) Ghi {outName} vào {doneFolder} ...";
+                    SafeSetStatus($"({idx}/{total}) Ghi {outName} vào {doneFolder} ...");
                     await Task.Run(() => AppendPayloadAndEmbeddedHashes(stubPath, outPath, zip, hashesBytes));
-                    StatusText.Text = $"({idx}/{total}) Hoàn tất: {outName}";
+                    SafeSetStatus($"({idx}/{total}) Hoàn tất: {outName}");
                 }
 
                 Progress.Value = 100;
@@ -242,39 +388,10 @@ namespace UsbPacker
                 RefreshDrivesBtn.IsEnabled = true;
                 Progress.Value = 0;
                 ProgressPercent.Text = "0%";
-                StatusText.Text = "Sẵn sàng";
+                SafeSetStatus("Sẵn sàng");
             }
         }
 
-        private void ExportHashesBtn_Click(object sender, RoutedEventArgs e)
-        {
-            if (LoadedHashes == null || LoadedHashes.Count == 0)
-            {
-                MessageBox.Show("Không có hash nào để xuất.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var dlg = new SaveFileDialog
-            {
-                FileName = "hashes.json",
-                DefaultExt = ".json",
-                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
-            };
-
-            if (dlg.ShowDialog() == true)
-            {
-                try
-                {
-                    var json = System.Text.Json.JsonSerializer.Serialize(LoadedHashes, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                    System.IO.File.WriteAllText(dlg.FileName, json, System.Text.Encoding.UTF8);
-                    MessageBox.Show($"Đã xuất {LoadedHashes.Count} hash vào:\n{dlg.FileName}", "Exported", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Lỗi khi lưu file: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
         // helpers
         static byte[] CreateZipForSingleFile(string file)
         {
@@ -304,26 +421,83 @@ namespace UsbPacker
             File.Copy(stubPath, outPath, overwrite: true);
             using var outFs = File.Open(outPath, FileMode.Append, FileAccess.Write);
 
-            // payload
             outFs.Write(payload, 0, payload.Length);
-
-            // payload length
             outFs.Write(BitConverter.GetBytes((long)payload.Length), 0, 8);
-
-            // payload magic
             var payloadMagic = Encoding.ASCII.GetBytes("VIDPKG1\0");
             outFs.Write(payloadMagic, 0, payloadMagic.Length);
 
-            // if no hashes, done
             if (hashesJsonBytes == null || hashesJsonBytes.Length == 0) return;
 
-            // metadata marker
             var metaMarker = Encoding.ASCII.GetBytes("HASHPKG1");
             outFs.Write(metaMarker, 0, metaMarker.Length);
-
-            // write hashes length and bytes
             outFs.Write(BitConverter.GetBytes((long)hashesJsonBytes.Length), 0, 8);
             outFs.Write(hashesJsonBytes, 0, hashesJsonBytes.Length);
+        }
+
+        private bool TryParseHashesFromText(string txt, out System.Collections.Generic.List<string> hashes, out string err)
+        {
+            hashes = new System.Collections.Generic.List<string>();
+            err = null;
+            if (string.IsNullOrWhiteSpace(txt)) return true;
+            try
+            {
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var tmp = JsonSerializer.Deserialize<System.Collections.Generic.List<string>>(txt, opts) ?? new System.Collections.Generic.List<string>();
+                var normalized = tmp.Select(h => h?.Trim()?.ToLowerInvariant()).Where(h => !string.IsNullOrEmpty(h)).ToList();
+                foreach (var h in normalized)
+                {
+                    if (h.Length != 64)
+                    {
+                        err = $"Hash '{h}' không hợp lệ (không đủ 64 ký tự hex).";
+                        return false;
+                    }
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(h, @"\A\b[0-9a-f]{64}\b\Z"))
+                    {
+                        err = $"Hash '{h}' chứa ký tự không hợp lệ (phải là hex).";
+                        return false;
+                    }
+                }
+                hashes = normalized.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                err = ex.Message;
+                return false;
+            }
+        }
+
+        private void UpdateHashesCount()
+        {
+            // cập nhật text hiển thị
+            var countText = this.FindName("HashesCountText") as System.Windows.Controls.TextBlock;
+            if (countText != null) countText.Text = $"{LoadedHashes.Count}";
+
+            // tìm Start button (an toàn nếu tên control bị đổi)
+            var startBtn = this.FindName("StartBtn") as System.Windows.Controls.Button;
+            if (startBtn != null)
+            {
+                bool enabled = LoadedHashes != null && LoadedHashes.Count > 0;
+
+                // Nếu bạn muốn thêm điều kiện khác (ví dụ phải có file trong FilesList),
+                // thay `enabled` = enabled && FilesList.Items.Count > 0
+
+                startBtn.IsEnabled = enabled;
+
+                // thay đổi giao diện "nhạt" khi disabled
+                // (opacity là cách nhanh, bạn có thể thay bằng đổi Background nếu muốn)
+                startBtn.Opacity = enabled ? 1.0 : 0.45;
+
+                // tooltip giải thích lý do disabled
+                startBtn.ToolTip = enabled ? "Create EXE(s) into ./Done" : "Disabled: chưa có hash nào. Chọn USB hoặc Import JSON trước.";
+            }
+        }
+
+
+        private void SafeSetStatus(string text)
+        {
+            var st = this.FindName("StatusText") as System.Windows.Controls.TextBlock;
+            if (st != null) st.Text = text;
         }
     }
 }
