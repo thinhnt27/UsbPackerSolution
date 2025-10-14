@@ -168,19 +168,45 @@ class Program
             var list = JsonSerializer.Deserialize<List<string>>(hashesJson) ?? new List<string>();
             if (list.Count == 0) return (false, "Embedded hashes list empty.");
 
-            // compute current drive salted hash
-            var exeRoot = Path.GetPathRoot(exePath);
-            if (string.IsNullOrEmpty(exeRoot)) return (false, "Cannot determine exe drive root.");
-            if (!exeRoot.EndsWith(Path.DirectorySeparatorChar)) exeRoot += Path.DirectorySeparatorChar;
-            uint serial = UsbAuth.GetVolumeSerial(exeRoot);
-            string serialHex = UsbAuth.VolumeSerialToHex(serial);
-            string genHash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, serialHex);
+            var usbDrives = UsbAuth.GetUsbDrivesWithSerial(); // cần System.Management
+            if (usbDrives == null || usbDrives.Count == 0)
+            {
+                // Fallback: thử ngay ổ đang chạy exe
+                var exeRoot = Path.GetPathRoot(exePath);
+                if (!string.IsNullOrEmpty(exeRoot))
+                {
+                    if (UsbAuth.TryGetHardwareSerialFromDriveRoot(exeRoot, out var hwSerial, out var cap, out var phys, out var dbg))
+                    {
+                        var genHash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, hwSerial);
+                        foreach (var h in list)
+                        {
+                            if (string.Equals(h, genHash, StringComparison.OrdinalIgnoreCase))
+                                return (true, $"USB validated (fallback by exe drive): {exeRoot} [{cap}]");
+                        }
+                        // Nếu chạy từ USB nhưng không khớp hash
+                        return (false, $"USB not authorized (fallback). gen={genHash}");
+                    }
+                    // Thêm chút thông tin debug thay vì trả “No USB drives detected.”
+                    return (false, $"No USB drives detected (fallback failed). exeRoot={exeRoot}");
+                }
 
-            foreach (var h in list)
-                if (string.Equals(h, genHash, StringComparison.OrdinalIgnoreCase))
-                    return (true, "USB validated: embedded hash matched.");
+                return (false, "No USB drives detected (no exe root).");
+            }
 
-            return (false, $"USB not authorized. Generated hash: {genHash}");
+            foreach (var d in usbDrives)
+            {
+                var sn = (d.HardwareSerial ?? "").Trim();
+                if (sn.Length == 0) continue;
+
+                string genHash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, sn);
+                foreach (var h in list)
+                {
+                    if (string.Equals(h, genHash, StringComparison.OrdinalIgnoreCase))
+                        return (true, $"USB validated: {d.DriveLetter} [{d.Caption}]");
+                }
+            }
+
+            return (false, "USB not authorized. No hardware serial matched embedded hashes.");
         }
         catch (Exception ex)
         {

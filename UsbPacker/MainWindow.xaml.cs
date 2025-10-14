@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Policy;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -154,9 +155,14 @@ namespace UsbPacker
             {
                 try
                 {
-                    uint serial = UsbAuth.GetVolumeSerial(d.Root);
-                    string serialHex = UsbAuth.VolumeSerialToHex(serial);
-                    string hash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, serialHex);
+                    if (!UsbAuth.TryGetHardwareSerialFromDriveRoot(d.Root, out var hwSerial, out var cap, out var phys, out var dbg))
+                    {
+                        MessageBox.Show($"Không lấy được Hardware Serial cho {d.Root}.\n{dbg}", "Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        continue;
+                    }
+
+                    string hash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, hwSerial);
                     if (!LoadedHashes.Any(h => string.Equals(h, hash, StringComparison.OrdinalIgnoreCase)))
                     {
                         LoadedHashes.Add(hash);
@@ -196,9 +202,14 @@ namespace UsbPacker
             {
                 try
                 {
-                    uint serial = UsbAuth.GetVolumeSerial(d.Root);
-                    string serialHex = UsbAuth.VolumeSerialToHex(serial);
-                    string hash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, serialHex);
+                    if (!UsbAuth.TryGetHardwareSerialFromDriveRoot(d.Root, out var hwSerial, out var cap, out var phys, out var dbg))
+                    {
+                        MessageBox.Show($"Không lấy được Hardware Serial cho {d.Root}.\n{dbg}", "Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        continue;
+                    }
+
+                    string hash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, hwSerial);
                     if (!newList.Any(h => string.Equals(h, hash, StringComparison.OrdinalIgnoreCase)))
                     {
                         newList.Add(hash);
@@ -501,3 +512,24 @@ namespace UsbPacker
         }
     }
 }
+// Nút 'Add File' để thêm video muốn add vô USB
+// Nút 'Remove selected' để xóa video không muốn add trong Files to pack
+// 
+// Mode có 2 chế độ: USB và Json
+//  USB:
+//      Nút 'Refresh': làm mới lại USB đã cắm
+//      Nút 'Select all': chọn tất cả USB đang có
+//      Nút 'Deselected': bỏ chọn tất cả USB đang chọn
+//      Nút 'Add -> Hashes': hash cái usb đang chọn thành json lưu trữ trong code
+//      Nút 'Refresh -> Hashes': để làm mới json(khi có thêm Usb mới) lại khi đã 'Add -> hashes' rồi
+//      Nút 'Export hashes' để tiến hành lấy json đã hashes thành file json
+//  Json:
+//      Nút 'Import hashes': đưa json đã hashes cho các USB vào
+//'Create EXE(s) -> Done': xuất hiện khi có ít nhất 1 json có trong chương trình; Để tiến hành đóng gói các video
+//# Publish StubPlayer (player) → output ở .\publish\stub\StubPlayer.exe
+//dotnet publish./ StubPlayer / StubPlayer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / stub
+//# Publish UsbPacker (UI) → output ở .\publish\usbpacker\UsbPacker.exe
+//dotnet publish./ UsbPacker / UsbPacker.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / usbpacker
+//# (Tuỳ chọn) Publish Packer CLI
+//dotnet publish./ Packer / Packer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / packer
+//Sau khi các exe được release thì trong folder 'stub'; copy hết bỏ vô folder 'usbpacker'
