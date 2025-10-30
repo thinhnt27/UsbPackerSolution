@@ -326,6 +326,12 @@ namespace UsbPacker
         // Start pack
         private async void StartBtn_Click(object sender, RoutedEventArgs e)
         {
+            if (string.IsNullOrWhiteSpace(SubjectNameBox.Text))
+            {
+                MessageBox.Show("Bạn phải nhập Subject name trước khi đóng gói!", "Thiếu thông tin",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             if (FilesList.Items.Count == 0) { MessageBox.Show("Chưa có file nào để pack."); return; }
 
             var appFolder = AppDomain.CurrentDomain.BaseDirectory;
@@ -381,6 +387,26 @@ namespace UsbPacker
                     SafeSetStatus($"({idx}/{total}) Ghi {outName} vào {doneFolder} ...");
                     await Task.Run(() => AppendPayloadAndEmbeddedHashes(stubPath, outPath, zip, hashesBytes));
                     SafeSetStatus($"({idx}/{total}) Hoàn tất: {outName}");
+                }
+                // === Save to SQLite DB ===
+                try
+                {
+                    string subjectName = SubjectNameBox.Text?.Trim();
+                    if (string.IsNullOrEmpty(subjectName))
+                        subjectName = "(no subject)";
+
+                    if (LoadedHashes != null && LoadedHashes.Count > 0)
+                    {
+                        foreach (var hash in LoadedHashes)
+                        {
+                            LocalDatabase.InsertHash(hash, subjectName);
+                        }
+                        SafeSetStatus($"Đã lưu {LoadedHashes.Count} hash vào local.db (subject: {subjectName})");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Lỗi ghi SQLite: {ex.Message}", "DB Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
 
                 Progress.Value = 100;
@@ -533,3 +559,12 @@ namespace UsbPacker
 //# (Tuỳ chọn) Publish Packer CLI
 //dotnet publish./ Packer / Packer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / packer
 //Sau khi các exe được release thì trong folder 'stub'; copy hết bỏ vô folder 'usbpacker'
+
+//# Publish StubPlayer (player) → output ở .\publish\stub\StubPlayer.exe
+//>> dotnet publish./ StubPlayer / StubPlayer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / stub
+//>>
+//>> # Publish UsbPacker (UI) → output ở .\publish\usbpacker\UsbPacker.exe
+//>> dotnet publish./ UsbPacker / UsbPacker.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / usbpacker
+//>>
+//>> # (Tuỳ chọn) Publish Packer CLI
+//>> dotnet publish./ Packer / Packer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / packer

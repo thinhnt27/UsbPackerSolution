@@ -110,14 +110,47 @@
             </StackPanel>
         </Grid>
 
-        <!-- Progress -->
+        <!-- Progress row -->
         <DockPanel Grid.Row="3" Margin="8,8,8,8" Grid.ColumnSpan="2">
-            <Button x:Name="StartBtn" Content="Create EXE(s) → Done"
-                    Click="StartBtn_Click" Width="300" Height="36"
-                    Background="#FF2D8CFF" Foreground="White" Margin="0,0,12,0"/>
-            <ProgressBar x:Name="Progress" Height="20" Minimum="0" Maximum="100" Margin="0,8,12,0" Width="Auto"/>
-            <TextBlock x:Name="ProgressPercent" VerticalAlignment="Center" Text="0%" Width="40"/>
+
+            <!-- Ô nhập subject name -->
+            <TextBox x:Name="SubjectNameBox"
+             Width="200"
+             Height="34"
+             VerticalAlignment="Center"
+             Margin="0,0,12,0"
+             FontWeight="SemiBold"
+             Foreground="DarkBlue"
+             BorderBrush="#FF2D8CFF"
+             BorderThickness="2"
+             VerticalContentAlignment="Center"
+             Padding="6,0"
+             ToolTip="Nhập tên hoặc mô tả cho lần đóng gói này" />
+
+            <!-- Nút Start -->
+            <Button x:Name="StartBtn"
+            Content="Create EXE(s) → Done"
+            Click="StartBtn_Click"
+            Width="260" Height="36"
+            Background="#FF2D8CFF"
+            Foreground="White"
+            Margin="0,0,12,0"/>
+
+            <!-- Thanh tiến trình -->
+            <ProgressBar x:Name="Progress"
+                 Height="20"
+                 Minimum="0"
+                 Maximum="100"
+                 Margin="0,8,12,0"
+                 Width="Auto"/>
+
+            <!-- Phần trăm -->
+            <TextBlock x:Name="ProgressPercent"
+               VerticalAlignment="Center"
+               Text="0%"
+               Width="40"/>
         </DockPanel>
+
 
         <!-- Status -->
         <StackPanel Grid.Row="4" Margin="8,8,8,8" Grid.ColumnSpan="2">
