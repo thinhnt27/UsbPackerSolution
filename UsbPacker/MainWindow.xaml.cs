@@ -188,14 +188,13 @@ namespace UsbPacker
                 MessageBox.Show("Đang ở chế độ Import JSON — để dùng USB hãy chuyển sang 'Use selected USBs'.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-
+            
             var selected = DrivesCollection.Where(x => x.IsChecked).ToArray();
             if (selected.Length == 0)
             {
                 MessageBox.Show("Chưa chọn USB nào. Hãy tick ít nhất 1 ổ.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-
             var newList = new List<string>();
             int added = 0;
             foreach (var d in selected)
@@ -208,7 +207,6 @@ namespace UsbPacker
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                         continue;
                     }
-
                     string hash = UsbAuth.MakeSaltedHash(UsbAuth.DefaultSalt, hwSerial);
                     if (!newList.Any(h => string.Equals(h, hash, StringComparison.OrdinalIgnoreCase)))
                     {
@@ -342,7 +340,12 @@ namespace UsbPacker
                 return;
             }
 
-            var doneFolder = Path.Combine(appFolder, "Done");
+            //var doneFolder = Path.Combine(appFolder, "Done");
+            //Directory.CreateDirectory(doneFolder);
+            var subjectNameFolder = SubjectNameBox.Text.Trim();
+            var safeSubject = MakeSafeFileName(subjectNameFolder);
+
+            var doneFolder = Path.Combine(appFolder, "Done", safeSubject);
             Directory.CreateDirectory(doneFolder);
 
             StartBtn.IsEnabled = false;
@@ -369,13 +372,13 @@ namespace UsbPacker
                     var safeName = MakeSafeFileName(baseName);
                     var outName = safeName + ".exe";
                     var outPath = Path.Combine(doneFolder, outName);
-                    int suffix = 1;
-                    while (File.Exists(outPath))
-                    {
-                        outName = $"{safeName}_{suffix}.exe";
-                        outPath = Path.Combine(doneFolder, outName);
-                        suffix++;
-                    }
+                    //int suffix = 1;
+                    //while (File.Exists(outPath))
+                    //{
+                    //    outName = $"{safeName}_{suffix}.exe";
+                    //    outPath = Path.Combine(doneFolder, outName);
+                    //    suffix++;
+                    //}
 
                     byte[] hashesBytes = Array.Empty<byte>();
                     if (LoadedHashes.Count > 0)
@@ -452,7 +455,6 @@ namespace UsbPacker
             if (name.Length > 100) name = name.Substring(0, 100);
             return name;
         }
-
         static void AppendPayloadAndEmbeddedHashes(string stubPath, string outPath, byte[] payload, byte[] hashesJsonBytes)
         {
             File.Copy(stubPath, outPath, overwrite: true);
@@ -520,7 +522,7 @@ namespace UsbPacker
                 // thay `enabled` = enabled && FilesList.Items.Count > 0
 
                 startBtn.IsEnabled = enabled;
-
+                  
                 // thay đổi giao diện "nhạt" khi disabled
                 // (opacity là cách nhanh, bạn có thể thay bằng đổi Background nếu muốn)
                 startBtn.Opacity = enabled ? 1.0 : 0.45;
@@ -534,6 +536,7 @@ namespace UsbPacker
         private void SafeSetStatus(string text)
         {
             var st = this.FindName("StatusText") as System.Windows.Controls.TextBlock;
+
             if (st != null) st.Text = text;
         }
     }
@@ -552,19 +555,24 @@ namespace UsbPacker
 //  Json:
 //      Nút 'Import hashes': đưa json đã hashes cho các USB vào
 //'Create EXE(s) -> Done': xuất hiện khi có ít nhất 1 json có trong chương trình; Để tiến hành đóng gói các video
-//# Publish StubPlayer (player) → output ở .\publish\stub\StubPlayer.exe
-//dotnet publish./ StubPlayer / StubPlayer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / stub
-//# Publish UsbPacker (UI) → output ở .\publish\usbpacker\UsbPacker.exe
-//dotnet publish./ UsbPacker / UsbPacker.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / usbpacker
-//# (Tuỳ chọn) Publish Packer CLI
-//dotnet publish./ Packer / Packer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / packer
-//Sau khi các exe được release thì trong folder 'stub'; copy hết bỏ vô folder 'usbpacker'
 
-//# Publish StubPlayer (player) → output ở .\publish\stub\StubPlayer.exe
-//>> dotnet publish./ StubPlayer / StubPlayer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / stub
-//>>
-//>> # Publish UsbPacker (UI) → output ở .\publish\usbpacker\UsbPacker.exe
-//>> dotnet publish./ UsbPacker / UsbPacker.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / usbpacker
-//>>
-//>> # (Tuỳ chọn) Publish Packer CLI
-//>> dotnet publish./ Packer / Packer.csproj - c Release - r win - x64 - p:PublishSingleFile = true - p:SelfContained = true - o./ publish / packer
+//dotnet publish ./Packer/Packer.csproj `
+//  -c Release `
+//  -r win-x64 `
+//  -p:PublishSingleFile=true `
+//  -p:SelfContained=true `
+//  -o ./publish/packer
+//dotnet publish ./UsbPacker/UsbPacker.csproj `
+//  -c Release `
+//  -r win-x64 `
+//  -p:PublishSingleFile=true `
+//  -p:SelfContained=true `
+//  -o ./publish/usbpacker
+//dotnet publish ./StubPlayer/StubPlayer.csproj `
+//  -c Release `
+//  -r win-x64 `
+//  -p:PublishSingleFile=true `
+//  -p:SelfContained=true `
+//  -o ./publish/stub
+
+

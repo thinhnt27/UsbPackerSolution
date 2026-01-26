@@ -129,7 +129,6 @@ namespace VideoPackerSolution.Utils
 
                 if (string.IsNullOrEmpty(deviceId))
                     continue;
-
                 var qPart = $@"ASSOCIATORS OF {{Win32_DiskDrive.DeviceID=""{deviceId.Replace(@"\", @"\\")}""}}
                        WHERE AssocClass = Win32_DiskDriveToDiskPartition";
                 using var partSearcher = new ManagementObjectSearcher(qPart);
@@ -139,7 +138,6 @@ namespace VideoPackerSolution.Utils
                 {
                     var partDeviceId = ((string?)part["DeviceID"])?.Trim(); // "Disk #2, Partition #1"
                     if (string.IsNullOrEmpty(partDeviceId)) continue;
-
                     var qLog = $@"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID=""{partDeviceId}""}}
                           WHERE AssocClass = Win32_LogicalDiskToPartition";
                     using var logSearcher = new ManagementObjectSearcher(qLog);
@@ -325,7 +323,6 @@ namespace VideoPackerSolution.Utils
                             }
                         }
                     }
-
                     // 5) Fallback: extract last token from PNPDeviceID (many USB expose serial here)
                     // Example PNPDeviceID: "USBSTOR\DISK&VEN_SANDISK&PROD_EXTREME&REV_1.00\AA01112233445566&0"
                     if (!string.IsNullOrWhiteSpace(pnp))
