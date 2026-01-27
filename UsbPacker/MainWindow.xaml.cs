@@ -266,41 +266,115 @@ namespace UsbPacker
         }
 
         // Export
+        //private void ExportHashesBtn_Click(object sender, RoutedEventArgs e)
+        //{
+        //    // ensure we're in USB mode
+        //    var useJsonRadio = this.FindName("UseJsonRadio") as System.Windows.Controls.RadioButton;
+        //    if (useJsonRadio != null && useJsonRadio.IsChecked == true)
+        //    {
+        //        MessageBox.Show("Export chỉ khả dụng khi đang ở chế độ 'Use selected USBs'. Hãy chuyển chế độ về USB.", "Không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Information);
+        //        return;
+        //    }
+
+        //    if (LoadedHashes == null || LoadedHashes.Count == 0)
+        //    {
+        //        MessageBox.Show("Không có hash nào để xuất.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+        //        return;
+        //    }
+
+        //    var dlg = new SaveFileDialog
+        //    {
+        //        FileName = "hashes.json",
+        //        DefaultExt = ".json",
+        //        Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+        //    };
+
+        //    if (dlg.ShowDialog() == true)
+        //    {
+        //        try
+        //        {
+        //            var json = JsonSerializer.Serialize(LoadedHashes, new JsonSerializerOptions { WriteIndented = true });
+        //            File.WriteAllText(dlg.FileName, json, Encoding.UTF8);
+        //            MessageBox.Show($"Đã xuất {LoadedHashes.Count} hash vào:\n{dlg.FileName}", "Exported", MessageBoxButton.OK, MessageBoxImage.Information);
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            MessageBox.Show("Lỗi khi lưu file: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        //        }
+        //    }
+        //}
         private void ExportHashesBtn_Click(object sender, RoutedEventArgs e)
         {
             // ensure we're in USB mode
             var useJsonRadio = this.FindName("UseJsonRadio") as System.Windows.Controls.RadioButton;
             if (useJsonRadio != null && useJsonRadio.IsChecked == true)
             {
-                MessageBox.Show("Export chỉ khả dụng khi đang ở chế độ 'Use selected USBs'. Hãy chuyển chế độ về USB.", "Không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(
+                    "Export chỉ khả dụng khi đang ở chế độ 'Use selected USBs'. Hãy chuyển chế độ về USB.",
+                    "Không hợp lệ",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
                 return;
             }
 
             if (LoadedHashes == null || LoadedHashes.Count == 0)
             {
-                MessageBox.Show("Không có hash nào để xuất.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(
+                    "Không có hash nào để xuất.",
+                    "Info",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
                 return;
             }
 
-            var dlg = new SaveFileDialog
-            {
-                FileName = "hashes.json",
-                DefaultExt = ".json",
-                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
-            };
+            // 🔹 LẤY SUBJECT (đổi theo app của bạn)
+            var subject = SubjectNameBox.Text;
 
-            if (dlg.ShowDialog() == true)
+            if (string.IsNullOrWhiteSpace(subject))
             {
-                try
-                {
-                    var json = JsonSerializer.Serialize(LoadedHashes, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(dlg.FileName, json, Encoding.UTF8);
-                    MessageBox.Show($"Đã xuất {LoadedHashes.Count} hash vào:\n{dlg.FileName}", "Exported", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Lỗi khi lưu file: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                MessageBox.Show(
+                    "Vui lòng nhập Subject trước khi export.",
+                    "Thiếu thông tin",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning
+                );
+                return;
+            }
+
+            // 🔹 BASE FOLDER (cùng thư mục exe)
+            string baseDir = AppContext.BaseDirectory;
+            string hashesDir = Path.Combine(baseDir, "Hashes", subject);
+
+            try
+            {
+                Directory.CreateDirectory(hashesDir);
+
+                string outputPath = Path.Combine(hashesDir, "hashes.json");
+
+                var json = JsonSerializer.Serialize(
+                    LoadedHashes,
+                    new JsonSerializerOptions { WriteIndented = true }
+                );
+
+                File.WriteAllText(outputPath, json, Encoding.UTF8);
+
+                MessageBox.Show(
+                    $"Đã xuất {LoadedHashes.Count} hash vào:\n{outputPath}",
+                    "Exported",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Lỗi khi lưu file: " + ex.Message,
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
             }
         }
 
